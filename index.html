@@ -32,8 +32,32 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
         }
         h1 { font-size: 1.8em; display: flex; align-items: center; gap: 12px; }
+        
+        /* Date Selector */
+        .date-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--card);
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        .date-selector select {
+            background: transparent;
+            color: var(--text);
+            border: none;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+        }
+        .date-selector select option { background: var(--card); }
+        .date-separator { color: var(--text-dim); font-size: 1.2em; }
         .badge {
             background: var(--card);
             padding: 6px 14px;
@@ -182,6 +206,18 @@
     <div class="container">
         <header>
             <h1><i class="fas fa-wallet"></i> 家庭账本</h1>
+            
+            <div class="date-selector">
+                <select id="yearSelect" onchange="loadData()">
+                    <option value="2026">2026年</option>
+                </select>
+                <span class="date-separator">/</span>
+                <select id="monthSelect" onchange="loadData()">
+                    <option value="01">01月</option>
+                    <option value="02">02月</option>
+                </select>
+            </div>
+            
             <button class="refresh-btn" onclick="loadData()">
                 <i class="fas fa-sync-alt"></i>
                 <span>刷新</span>
@@ -258,8 +294,10 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5senF0Y2Rhdmhla2x2cmx6bG9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxODgyMzcsImV4cCI6MjA2ODc2NDIzN30.aLL5OiAAxsyqH_3VvW9dC_ZwjrbXFvnZ_yNcDnZAAvQ';
         
         let allData = [];
+        let currentYear = '2026';
+        let currentMonth = '01';
         
-        async function fetchData() {
+        async function fetchAllData() {
             const response = await fetch(`${SUPABASE_URL}/rest/v1/family_ledger_transactions?order=创建时间.desc`, {
                 headers: {
                     'apikey': SUPABASE_KEY,
@@ -273,10 +311,18 @@
             return '€' + Math.abs(amount).toLocaleString('de-DE', {minimumFractionDigits: 2});
         }
         
+        function getFilteredData() {
+            return allData.filter(d => {
+                const date = d.日期;
+                return date.startsWith(`${currentYear}-${currentMonth}`);
+            });
+        }
+        
         async function loadData() {
             document.querySelector('.refresh-btn').classList.add('loading');
             try {
-                allData = await fetchData();
+                allData = await fetchAllData();
+                initDateSelector();
                 updateStats();
                 updateRecent();
                 updateCategories();
@@ -288,34 +334,65 @@
             document.querySelector('.refresh-btn').classList.remove('loading');
         }
         
+        function initDateSelector() {
+            // Extract available months from data
+            const months = new Set();
+            allData.forEach(d => {
+                const m = d.日期.substring(0, 7);
+                months.add(m);
+            });
+            
+            const sortedMonths = Array.from(months).sort().reverse();
+            
+            // Update year selector
+            const years = new Set(sortedMonths.map(m => m.substring(0, 4)));
+            const yearSelect = document.getElementById('yearSelect');
+            yearSelect.innerHTML = Array.from(years).map(y => 
+                `<option value="${y}">${y}年</option>`
+            ).join('');
+            
+            // Update month selector
+            const monthSelect = document.getElementById('monthSelect');
+            monthSelect.innerHTML = [12,11,10,9,8,7,6,5,4,3,2,1].map(m => {
+                const v = m.toString().padStart(2, '0');
+                return `<option value="${v}" ${v === currentMonth ? 'selected' : ''}>${v}月</option>`;
+            }).join('');
+            
+            currentYear = yearSelect.value;
+            currentMonth = monthSelect.value;
+        }
+        
         function updateStats() {
-            const income = allData.filter(d => d.收支 === '收入').reduce((s, d) => s + Math.abs(d.金额_eur), 0);
-            const expense = allData.filter(d => d.收支 === '支出').reduce((s, d) => s + d.金额_eur, 0);
+            const data = getFilteredData();
+            const income = data.filter(d => d.收支 === '收入').reduce((s, d) => s + Math.abs(d.金额_eur), 0);
+            const expense = data.filter(d => d.收支 === '支出').reduce((s, d) => s + d.金额_eur, 0);
             
             document.getElementById('totalIncome').textContent = formatCurrency(income);
             document.getElementById('totalExpense').textContent = formatCurrency(expense);
             document.getElementById('netFlow').textContent = formatCurrency(income - expense);
-            document.getElementById('totalCount').textContent = allData.length;
+            document.getElementById('totalCount').textContent = data.length;
         }
         
         function updateRecent() {
-            const html = allData.slice(0, 15).map(d => `
+            const data = getFilteredData();
+            const html = data.slice(0, 15).map(d => `
                 <div class="list-item">
                     <div class="item-info">
                         <div class="item-merchant">${d.商家}</div>
-                        <div class="item-meta">${d.日期} · ${d.分类}</div>
+                        <div class="item-meta">${d.日期.slice(5)} · ${d.分类}</div>
                     </div>
                     <div class="item-amount ${d.收支 === '收入' ? 'income' : 'expense'}">
                         ${d.收支 === '收入' ? '+' : '-'}${formatCurrency(d.金额_eur)}
                     </div>
                 </div>
             `).join('');
-            document.getElementById('recentList').innerHTML = html;
+            document.getElementById('recentList').innerHTML = html || '<div class="loading">暂无数据</div>';
         }
         
         function updateCategories() {
+            const data = getFilteredData();
             const cats = {};
-            allData.filter(d => d.收支 === '支出').forEach(d => {
+            data.filter(d => d.收支 === '支出').forEach(d => {
                 cats[d.分类] = (cats[d.分类] || 0) + d.金额_eur;
             });
             
@@ -339,7 +416,7 @@
                     <div class="item-amount expense">${formatCurrency(amount)}</div>
                 </div>
             `).join('');
-            document.getElementById('categoryList').innerHTML = html;
+            document.getElementById('categoryList').innerHTML = html || '<div class="loading">暂无分类数据</div>';
         }
         
         function updateMonthly() {
@@ -352,68 +429,95 @@
             });
             
             const sorted = Object.entries(months).sort().reverse();
-            const html = sorted.map(([month, data]) => `
-                <a href="#" class="month-card">
-                    <div class="month-header">
-                        <span class="month-name">${month.replace('-', '年')}月</span>
-                        <span class="month-badge">${data.income > 0 ? '已归档' : '进行中'}</span>
-                    </div>
-                    <div class="month-stats">
-                        <div>
-                            <div class="month-stat-label">收入</div>
-                            <div class="month-stat-value in">${formatCurrency(data.income)}</div>
+            const html = sorted.map(([month, data]) => {
+                const [y, m] = month.split('-');
+                const isCurrent = y === currentYear && m === currentMonth;
+                return `
+                    <a href="${isCurrent ? 'javascript:void(0)' : month + '.html'}" 
+                       class="month-card ${isCurrent ? 'active' : ''}"
+                       ${isCurrent ? '' : 'onclick="selectMonth(\'' + month + '\')'}"
+                       style="${isCurrent ? 'border-color:var(--primary);cursor:default;' : ''}">
+                        <div class="month-header">
+                            <span class="month-name">${y}年${parseInt(m)}月</span>
+                            <span class="month-badge">${data.income > 0 ? '已归档' : '进行中'}</span>
                         </div>
-                        <div>
-                            <div class="month-stat-label">支出</div>
-                            <div class="month-stat-value out">${formatCurrency(data.expense)}</div>
+                        <div class="month-stats">
+                            <div>
+                                <div class="month-stat-label">收入</div>
+                                <div class="month-stat-value in">${formatCurrency(data.income)}</div>
+                            </div>
+                            <div>
+                                <div class="month-stat-label">支出</div>
+                                <div class="month-stat-value out">${formatCurrency(data.expense)}</div>
+                            </div>
                         </div>
-                    </div>
-                </a>
-            `).join('');
+                    </a>
+                `;
+            }).join('');
             document.getElementById('monthsGrid').innerHTML = html;
         }
         
+        function selectMonth(monthStr) {
+            const [y, m] = monthStr.split('-');
+            document.getElementById('yearSelect').value = y;
+            document.getElementById('monthSelect').value = m;
+            currentYear = y;
+            currentMonth = m;
+            updateStats();
+            updateRecent();
+            updateCategories();
+            updateCharts();
+        }
+        
         function updateCharts() {
-            // Monthly Chart
-            const months = {};
-            allData.forEach(d => {
-                const m = d.日期.substring(0, 7);
-                if (!months[m]) months[m] = { income: 0, expense: 0 };
-                if (d.收支 === '收入') months[m].income += Math.abs(d.金额_eur);
-                else months[m].expense += d.金额_eur;
-            });
+            const data = getFilteredData();
             
-            const sorted = Object.entries(months).sort();
-            new Chart(document.getElementById('monthlyChart'), {
+        // Monthly Chart - show daily breakdown for selected month
+            const daily = {};
+            data.filter(d => d.收支 === '支出').forEach(d => {
+                const day = d.日期.slice(5);
+                daily[day] = (daily[day] || 0) + d.金额_eur;
+            });
+            const sortedDaily = Object.entries(daily).sort((a, b) => a[0].localeCompare(b[0]));
+            
+            const ctx = document.getElementById('monthlyChart').getContext('2d');
+            if (window.monthlyChartInstance) window.monthlyChartInstance.destroy();
+            
+            window.monthlyChartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: sorted.map(([m]) => m.replace('-', '/')),
-                    datasets: [
-                        { label: '收入', data: sorted.map(([,d]) => d.income), backgroundColor: 'rgba(34, 197, 94, 0.7)', borderRadius: 6 },
-                        { label: '支出', data: sorted.map(([,d]) => d.expense), backgroundColor: 'rgba(239, 68, 68, 0.7)', borderRadius: 6 }
-                    ]
+                    labels: sortedDaily.map(([d]) => d),
+                    datasets: [{
+                        label: '每日支出',
+                        data: sortedDaily.map(([,a]) => a),
+                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                        borderRadius: 4
+                    }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', maxTicksLimit: 15 } },
                         y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', callback: v => '€' + v } }
                     },
-                    plugins: { legend: { labels: { color: '#fff' } } }
+                    plugins: { legend: { display: false } }
                 }
             });
             
             // Category Chart
             const cats = {};
-            allData.filter(d => d.收支 === '支出').forEach(d => {
+            data.filter(d => d.收支 === '支出').forEach(d => {
                 cats[d.分类] = (cats[d.分类] || 0) + d.金额_eur;
             });
             
             const sortedCats = Object.entries(cats).sort((a, b) => b[1] - a[1]);
             const catColors = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
             
-            new Chart(document.getElementById('categoryChart'), {
+            const ctx2 = document.getElementById('categoryChart').getContext('2d');
+            if (window.categoryChartInstance) window.categoryChartInstance.destroy();
+            
+            window.categoryChartInstance = new Chart(ctx2, {
                 type: 'doughnut',
                 data: {
                     labels: sortedCats.map(([c]) => c),
