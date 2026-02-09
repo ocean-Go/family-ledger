@@ -58,6 +58,19 @@
         }
         .date-selector select option { background: var(--card); }
         .date-separator { color: var(--text-dim); font-size: 1.2em; }
+        
+        /* Error Banner */
+        .error-banner {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid var(--danger);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: none;
+            color: var(--danger);
+            font-size: 0.9em;
+        }
+        .error-banner.show { display: flex; align-items: center; gap: 10px; }
         .badge {
             background: var(--card);
             padding: 6px 14px;
@@ -224,6 +237,12 @@
             </button>
         </header>
         
+        <!-- Error Banner -->
+        <div class="error-banner" id="errorBanner">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span id="errorMessage">数据加载失败，使用演示数据</span>
+        </div>
+        
         <!-- Stats -->
         <section class="stats" id="stats">
             <div class="stat-card">
@@ -298,13 +317,19 @@
         let currentMonth = '01';
         
         async function fetchAllData() {
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/family_ledger_transactions?order=创建时间.desc`, {
-                headers: {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': `Bearer ${SUPABASE_KEY}`
-                }
-            });
-            return await response.json();
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/family_ledger_transactions?order=创建时间.desc`, {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+                if (!response.ok) throw new Error('API error');
+                return await response.json();
+            } catch (e) {
+                console.error('Fetch error:', e);
+                return [];
+            }
         }
         
         function formatCurrency(amount) {
@@ -320,8 +345,18 @@
         
         async function loadData() {
             document.querySelector('.refresh-btn').classList.add('loading');
+            document.getElementById('errorBanner').classList.remove('show');
+            
             try {
                 allData = await fetchAllData();
+                
+                // If no data from Supabase, use demo data
+                if (!allData || allData.length === 0) {
+                    document.getElementById('errorBanner').classList.add('show');
+                    document.getElementById('errorMessage').textContent = 'Supabase 无数据，使用演示数据';
+                    allData = getDemoData();
+                }
+                
                 initDateSelector();
                 updateStats();
                 updateRecent();
@@ -330,16 +365,37 @@
                 updateCharts();
             } catch (e) {
                 console.error('Error loading data:', e);
+                document.getElementById('errorBanner').classList.add('show');
+                document.getElementById('errorMessage').textContent = '数据加载失败: ' + e.message;
+                allData = getDemoData();
+                initDateSelector();
+                updateStats();
+                updateRecent();
+                updateCategories();
+                updateMonthly();
+                updateCharts();
             }
             document.querySelector('.refresh-btn').classList.remove('loading');
+        }
+        
+        function getDemoData() {
+            return [
+                { 日期: '2026-01-04', 商家: 'Ahorramás', 金额_eur: 43.12, 收支: '支出', 分类: '超市', 支付方式: '招行信用卡' },
+                { 日期: '2026-01-05', 商家: 'Mercadona', 金额_eur: 21.17, 收支: '支出', 分类: '超市', 支付方式: 'BBVA' },
+                { 日期: '2026-01-28', 商家: 'Ahorramás', 金额_eur: 54.55, 收支: '支出', 分类: '超市', 支付方式: 'BBVA' },
+                { 日期: '2026-01-18', 商家: 'El Corte Inglés', 金额_eur: 15.90, 收支: '收入', 分类: '家电', 支付方式: 'BBVA' },
+                { 日期: '2026-01-15', 商家: '普拉提课程', 金额_eur: 90.00, 收支: '支出', 分类: '健身', 支付方式: 'BBVA' },
+            ];
         }
         
         function initDateSelector() {
             // Extract available months from data
             const months = new Set();
             allData.forEach(d => {
-                const m = d.日期.substring(0, 7);
-                months.add(m);
+                if (d.日期) {
+                    const m = d.日期.substring(0, 7);
+                    months.add(m);
+                }
             });
             
             const sortedMonths = Array.from(months).sort().reverse();
@@ -349,7 +405,7 @@
             const yearSelect = document.getElementById('yearSelect');
             yearSelect.innerHTML = Array.from(years).map(y => 
                 `<option value="${y}">${y}年</option>`
-            ).join('');
+            ).join('') || '<option value="2026">2026年</option>';
             
             // Update month selector
             const monthSelect = document.getElementById('monthSelect');
