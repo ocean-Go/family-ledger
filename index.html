@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏠 家庭账本 | Family Ledger AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #0f0f23;
+            --bg-secondary: #1a1a2e;
+            --bg-card: #16213e;
+            --accent: #e94560;
+            --accent-gradient: linear-gradient(135deg, #e94560 0%, #0f3460 100%);
+            --text-primary: #eee;
+            --text-secondary: #a0a0a0;
+            --success: #00d26a;
+            --warning: #fcd535;
+            --danger: #f85149;
+            --border: rgba(255,255,255,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            background: var(--bg-secondary);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        /* Main Layout */
+        main {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 2rem;
+            padding: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 1024px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Upload Section */
+        .upload-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(233, 69, 96, 0.05);
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(233, 69, 96, 0.1);
+        }
+
+        .upload-zone i {
+            font-size: 3rem;
+            color: var(--accent);
+            margin-bottom: 1rem;
+        }
+
+        .upload-zone p {
+            color: var(--text-secondary);
+        }
+
+        .upload-zone .highlight {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        /* Result Table */
+        .result-section {
+            margin-top: 1.5rem;
+        }
+
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .result-table th, .result-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .result-table th {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .tag-expense { background: rgba(248, 81, 73, 0.2); color: var(--danger); }
+        .tag-income { background: rgba(0, 210, 106, 0.2); color: var(--success); }
+
+        /* Alert */
+        .alert {
+            background: rgba(252, 213, 53, 0.1);
+            border: 1px solid var(--warning);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .alert i { color: var(--warning); margin-right: 0.5rem; }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        .stat-income { color: var(--success); }
+        .stat-expense { color: var(--danger); }
+        .stat-net { color: var(--accent); }
+
+        /* Charts */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+
+        .chart-container {
+            height: 300px;
+        }
+
+        /* Recent Transactions */
+        .transactions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .transaction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        .transaction-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .transaction-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .transaction-details h4 {
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .transaction-details p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .transaction-amount {
+            text-align: right;
+        }
+
+        .transaction-amount .amount {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .transaction-amount .date {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Category Icons */
+        .cat-dining { background: rgba(255, 159, 67, 0.2); color: #ff9f43; }
+        .cat-shopping { background: rgba(255, 99, 132, 0.2); color: #ff6384; }
+        .cat-transport { background: rgba(54, 162, 235, 0.2); color: #36a2eb; }
+        .cat-housing { background: rgba(75, 192, 192, 0.2); color: #4bc0c0; }
+        .cat-medical { background: rgba(255, 159, 64, 0.2); color: #ff9f40; }
+        .cat-entertainment { background: rgba(153, 102, 255, 0.2); color: #9966ff; }
+        .cat-children { background: rgba(255, 205, 86, 0.2); color: #ffcd56; }
+        .cat-other { background: rgba(201, 203, 207, 0.2); color: #c9c9cf; }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.active { display: block; }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(233, 69, 96, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        /* Manual Input */
+        .manual-input {
+            margin-top: 1.5rem;
+        }
+
+        .manual-input details {
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .manual-form {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        .form-group {
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .form-group label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .form-group input, .form-group select {
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">🏠 家庭账本</div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="refreshData()">
+                <i class="fas fa-sync-alt"></i> 刷新
+            </button>
+            <button class="btn btn-primary" onclick="exportData()">
+                <i class="fas fa-download"></i> 导出
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <!-- Left: Upload Section -->
+        <div class="upload-section">
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-receipt"></i> 上传收据/小票
+                </div>
+                
+                <div class="upload-zone" id="uploadZone">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <p>拖拽图片到这里 或 <span class="highlight">点击上传</span></p>
+                    <p style="font-size: 0.8rem; margin-top: 0.5rem;">支持 JPG, PNG, PDF</p>
+                </div>
+                <input type="file" id="fileInput" accept="image/*,.pdf" hidden>
+
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>AI 正在识别收据信息...</p>
+                </div>
+
+                <div class="result-section" id="resultSection" style="display: none;">
+                    <div class="card-title">
+                        <i class="fas fa-check-circle" style="color: var(--success);"></i> 识别结果
+                    </div>
+                    <table class="result-table">
+                        <tr>
+                            <th>日期</th>
+                            <td id="resultDate">-</td>
+                        </tr>
+                        <tr>
+                            <th>商家</th>
+                            <td id="resultMerchant">-</td>
+                        </tr>
+                        <tr>
+                            <th>金额</th>
+                            <td id="resultAmount">-</td>
+                        </tr>
+                        <tr>
+                            <th>类型</th>
+                            <td><span class="tag" id="resultType">-</span></td>
+                        </tr>
+                        <tr>
+                            <th>分类</th>
+                            <td id="resultCategory">-</td>
+                        </tr>
+                        <tr>
+                            <th>支付方式</th>
+                            <td id="resultPayment">-</td>
+                        </tr>
+                    </table>
+                    
+                    <div class="alert" id="resultAlert" style="display: none;">
+                        <i class="fas fa-lightbulb"></i>
+                        <span id="alertText"></span>
+                    </div>
+
+                    <button class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="saveTransaction()">
+                        <i class="fas fa-save"></i> 保存记录
+                    </button>
+                </div>
+
+                <details class="manual-input">
+                    <summary>💡 手动输入</summary>
+                    <div class="manual-form">
+                        <div class="form-group">
+                            <label>日期</label>
+                            <input type="date" id="inputDate">
+                        </div>
+                        <div class="form-group">
+                            <label>商家</label>
+                            <input type="text" id="inputMerchant" placeholder="商家名称">
+                        </div>
+                        <div class="form-group">
+                            <label>金额 (€)</label>
+                            <input type="number" id="inputAmount" step="0.01" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label>类型</label>
+                            <select id="inputType">
+                                <option value="支出">支出</option>
+                                <option value="收入">收入</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>分类</label>
+                            <select id="inputCategory">
+                                <option value="餐饮">餐饮</option>
+                                <option value="超市">超市</option>
+                                <option value="交通">交通</option>
+                                <option value="房租">房租</option>
+                                <option value="水电">水电</option>
+                                <option value="孩子">孩子</option>
+                                <option value="医疗">医疗</option>
+                                <option value="娱乐">娱乐</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>支付方式</label>
+                            <select id="inputPayment">
+                                <option value="现金">现金</option>
+                                <option value="信用卡">信用卡</option>
+                                <option value="借记卡">借记卡</option>
+                                <option value="支付宝">支付宝</option>
+                                <option value="微信">微信</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveManualTransaction()">
+                            <i class="fas fa-plus"></i> 添加记录
+                        </button>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <!-- Right: Dashboard -->
+        <div class="dashboard">
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">💰 总收入</div>
+                    <div class="stat-value stat-income" id="totalIncome">€0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">💸 总支出</div>
+                    <div class="stat-value stat-expense" id="totalExpense">€0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">📊 净流入</div>
+                    <div class="stat-value stat-net" id="totalNet">€0.00</div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fas fa-chart-line"></i> 月度趋势
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fas fa-chart-pie"></i> 分类占比
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-history"></i> 最近交易
+                </div>
+                <div class="transactions-list" id="transactionsList">
+                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                        暂无交易记录
+                    </p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
